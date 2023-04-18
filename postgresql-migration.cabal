@@ -1,0 +1,52 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.35.2.
+--
+-- see: https://github.com/sol/hpack
+
+name:           postgresql-migration
+version:        1.0.0
+synopsis:       Postgres Migration Library
+description:    This package offers easy migration library for Postgres database
+category:       Web
+homepage:       https://github.com/haskellify/postgresql-migration
+bug-reports:    https://github.com/haskellify/postgresql-migration/issues
+author:         Vojtech Knaisl <vknaisl@gmail.com>
+maintainer:     Vojtech Knaisl <vknaisl@gmail.com>
+copyright:      2018 Vojtech Knaisl <vknaisl@gmail.com>
+license:        Apache
+license-file:   LICENSE.md
+build-type:     Simple
+tested-with:
+    GHC==9.4.4
+
+source-repository head
+  type: git
+  location: git@github.com:haskellify/postgresql-migration.git
+
+library
+  exposed-modules:
+      Database.PostgreSQL.Migration.Database
+      Database.PostgreSQL.Migration.Entity
+      Database.PostgreSQL.Migration.Migration
+  other-modules:
+      Paths_postgresql_migration
+  hs-source-dirs:
+      lib
+  default-extensions:
+      OverloadedStrings
+      DeriveGeneric
+  build-depends:
+      base
+    , monad-logger
+    , mtl
+    , postgresql-libpq
+    , postgresql-simple
+    , resource-pool
+    , text
+    , time
+  default-language: Haskell2010
+  if os(darwin)
+    ghc-options: -O0 -fwarn-unused-imports -fno-warn-warnings-deprecations
+  else
+    ghc-options: -O0 -fwarn-unused-imports -fno-warn-warnings-deprecations

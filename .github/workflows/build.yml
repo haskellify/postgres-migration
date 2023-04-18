@@ -1,0 +1,81 @@
+name: Build
+
+on:
+  push:
+  schedule:
+  - cron: '0 2 * * *'
+
+jobs:
+  btp:
+    name: Build-Tag-Push
+    runs-on: ubuntu-22.04
+
+    strategy:
+      matrix:
+        stack: [2.9.3]
+    
+    env:
+      COMPONENT: ${{ matrix.component }}
+      IMAGE_NAME: ${{ matrix.component }}-server
+      PUBLIC_IMAGE_PREFIX: datastewardshipwizard
+      DOCKER_META_CONTEXT: './engine-${{ matrix.component }}'
+      DOCKER_META_FILE: './engine-${{ matrix.component }}/Dockerfile'
+      DOCKER_META_PLATFORMS: 'linux/amd64'
+      STACK_VERSION: ${{ matrix.stack }}
+
+    steps:
+    - name: Detect force push
+      if: github.event_name == 'push' && github.event.forced
+      run: echo "Force push detected. Cache may be invalidated..."
+
+    - name: Checkout git repository
+      uses: actions/checkout@v3
+
+    - name: Fetch all git history
+      run: |
+        git fetch --prune --unshallow
+    
+    - name: Prepare ~/.local/bin
+      run: |
+        mkdir -p ~/.local/bin
+        export PATH=~/.local/bin:$PATH
+
+# (1) -> Setup cache
+    - name: Cache ~/.stack
+      id: cache-stack
+      uses: actions/cache@v3
+      with:
+        path: ~/.stack
+        key: stack-home-ubuntu22-${{ hashFiles('**/package.yaml')}}-${{ hashFiles('**/stack.yaml*') }}
+        restore-keys: |
+          stack-home-ubuntu22-
+    
+    - name: Cache Stack in ~/.local/bin
+      id: cache-stack-local-bin
+      uses: actions/cache@v3
+      with:
+        path: ~/.local/bin
+        key: stack-local-bin-ubuntu22-${{ matrix.stack }}
+
+# (2) -> Prepare and install dependencies     
+    - name: Setup stack
+      if: steps.cache-stack-local-bin.outputs.cache-hit != 'true'
+      run: |
+        curl -L https://github.com/commercialhaskell/stack/releases/download/v$STACK_VERSION/stack-$STACK_VERSION-linux-x86_64.tar.gz | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack';
+        
+    - name: Install GHC and dependencies
+      run: |
+        stack test --no-terminal --install-ghc --only-dependencies
+        
+# (3) -> Build binary
+    - name: Build and test application 
+      run: |
+        stack test --no-terminal --skip-ghc-check 2>&1 | tee log.txt
+        WARNINGS=$(grep -o ': warning: ' log.txt | wc -l)
+        if [ $WARNINGS -gt "0" ]; then
+          echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+          echo "!! GHC WARNINGS DETECTED ($WARNINGS):"
+          grep ': warning: ' -A 3 log.txt
+          echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+          exit 1
+        fi
