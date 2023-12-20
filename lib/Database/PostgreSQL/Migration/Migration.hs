@@ -10,15 +10,15 @@ import Database.PostgreSQL.Simple (Connection)
 import Database.PostgreSQL.Migration.Database
 import Database.PostgreSQL.Migration.Entity
 
-migrateDatabase :: Pool Connection -> [MigrationDefinition] -> (String -> LoggingT IO ()) -> LoggingT IO (Maybe Error)
-migrateDatabase dbPool migrationDefinitions logInfo = do
+migrateDatabase :: Pool Connection -> String -> [MigrationDefinition] -> (String -> LoggingT IO ()) -> LoggingT IO (Maybe Error)
+migrateDatabase dbPool dbPrefix migrationDefinitions logInfo = do
   logInfo "started"
   logInfo "ensure migration table in DB: started"
   startTransaction dbPool
-  ensureMigrationTable dbPool
+  ensureMigrationTable dbPool dbPrefix
   logInfo "ensure migration table in DB: loaded"
   logInfo "loading migrations from DB: started"
-  appliedMigrations <- getMigrationsFromDb dbPool
+  appliedMigrations <- getMigrationsFromDb dbPool dbPrefix
   logInfo "loading migrations from DB: verifying"
   let missingMigrations = verifyAppliedMigrations appliedMigrations
   logInfo "loading migrations from DB: loaded"
@@ -58,9 +58,9 @@ migrateDatabase dbPool migrationDefinitions logInfo = do
       logInfo $ "Migration (" ++ (show . mmNumber $ meta) ++ " - " ++ mmName meta ++ "): started"
       case maybeError of
         Nothing -> do
-          startMigration dbPool meta
+          startMigration dbPool dbPrefix meta
           let result = migrate dbPool
-          endMigration dbPool meta
+          endMigration dbPool dbPrefix meta
           logInfo $ "Migration (" ++ (show . mmNumber $ meta) ++ " - " ++ mmName meta ++ "): finished"
           result
         Just error -> return . Just $ error

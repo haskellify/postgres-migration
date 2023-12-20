@@ -3,10 +3,12 @@ module Database.PostgreSQL.Migration.Database where
 import Control.Monad.Logger (LoggingT)
 import Control.Monad.Reader (liftIO)
 import Data.Pool (Pool, withResource)
+import Data.String
 import Data.Time
 import Database.PostgreSQL.Simple
 
 import Database.PostgreSQL.Migration.Entity
+import Database.PostgreSQL.Migration.Util
 
 instance ToRow MigrationRecord
 
@@ -22,41 +24,48 @@ toMigrationRecord migrationMeta state createdAt =
     , mrCreatedAt = createdAt
     }
 
-getMigrationsFromDb :: Pool Connection -> LoggingT IO [MigrationRecord]
-getMigrationsFromDb dbPool = do
-  let action conn = query_ conn "SELECT * FROM migration ORDER BY number ASC;"
+getMigrationsFromDb :: Pool Connection -> String -> LoggingT IO [MigrationRecord]
+getMigrationsFromDb dbPool dbPrefix = do
+  let action conn = query_ conn (fromString $ f' "SELECT * FROM %s ORDER BY number ASC;" [createEntityName dbPrefix])
   runDB dbPool action
 
-ensureMigrationTable :: Pool Connection -> LoggingT IO ()
-ensureMigrationTable dbPool = do
+ensureMigrationTable :: Pool Connection -> String -> LoggingT IO ()
+ensureMigrationTable dbPool dbPrefix = do
   let sql =
-        "create table if not exists migration \
-        \ ( \
-        \     number integer                  not null \
-        \         constraint migration_pk \
-        \             primary key, \
-        \     name            varchar                  not null, \
-        \     description     varchar                  not null, \
-        \     state           varchar                  not null, \
-        \     created_at      timestamp with time zone not null \
-        \ ); \
-        \ create unique index if not exists migration_number_uindex \
-        \    on migration (number); "
+        fromString $
+          f'
+            "create table if not exists %s \
+            \ ( \
+            \     number integer                  not null \
+            \         constraint %s_pk \
+            \             primary key, \
+            \     name            varchar                  not null, \
+            \     description     varchar                  not null, \
+            \     state           varchar                  not null, \
+            \     created_at      timestamp with time zone not null \
+            \ ); \
+            \ create unique index if not exists %s_number_uindex \
+            \    on %s (number); "
+            [ createEntityName dbPrefix
+            , createEntityName dbPrefix
+            , createEntityName dbPrefix
+            , createEntityName dbPrefix
+            ]
   let action conn = execute_ conn sql
   runDB dbPool action
   return ()
 
-startMigration :: Pool Connection -> MigrationMeta -> LoggingT IO ()
-startMigration dbPool meta = do
+startMigration :: Pool Connection -> String -> MigrationMeta -> LoggingT IO ()
+startMigration dbPool dbPrefix meta = do
   now <- liftIO getCurrentTime
   let entity = toMigrationRecord meta _STARTED now
-  let action conn = execute conn "INSERT INTO migration VALUES (?,?,?,?,?);" entity
+  let action conn = execute conn (fromString $ f' "INSERT INTO %s VALUES (?,?,?,?,?);" [createEntityName dbPrefix]) entity
   runDB dbPool action
   return ()
 
-endMigration :: Pool Connection -> MigrationMeta -> LoggingT IO ()
-endMigration dbPool meta = do
-  let action conn = execute conn "UPDATE migration SET state = 'DONE' WHERE number = ?;" [mmNumber meta]
+endMigration :: Pool Connection -> String -> MigrationMeta -> LoggingT IO ()
+endMigration dbPool dbPrefix meta = do
+  let action conn = execute conn (fromString $ f' "UPDATE %s SET state = 'DONE' WHERE number = ?;" [createEntityName dbPrefix]) [mmNumber meta]
   runDB dbPool action
   return ()
 
@@ -79,3 +88,5 @@ rollbackTransaction dbPool = do
   return ()
 
 runDB dbPool action = liftIO $ withResource dbPool action
+
+createEntityName dbPrefix = f' "%smigration" [dbPrefix]

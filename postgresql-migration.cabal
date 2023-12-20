@@ -5,7 +5,7 @@ cabal-version: 1.12
 -- see: https://github.com/sol/hpack
 
 name:           postgresql-migration
-version:        1.0.0
+version:        1.1.0
 synopsis:       Postgres Migration Library
 description:    This package offers easy migration library for Postgres database
 category:       Web
@@ -29,6 +29,7 @@ library
       Database.PostgreSQL.Migration.Database
       Database.PostgreSQL.Migration.Entity
       Database.PostgreSQL.Migration.Migration
+      Database.PostgreSQL.Migration.Util
   other-modules:
       Paths_postgresql_migration
   hs-source-dirs:
